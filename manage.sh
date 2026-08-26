@@ -4,42 +4,46 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 BOT_SCRIPT="bot_schedule_nbc.py"
 
-# Динамически определяем имя окружения (test или prod) на основе пути проекта
 ENV_NAME=$(basename "$PROJECT_DIR")
-LOG_DIR="/dev/shm/schedule_nbc_tasks/${ENV_NAME}/logs"
-LOG_FILE="$LOG_DIR/bot.log"
 
-# Функция для подготовки окружения в RAM
-init_ram_disk() {
-    mkdir -p "$LOG_DIR"
-    chmod -R 775 "/dev/shm/schedule_nbc_tasks" 2>/dev/null
-}
+# ИСПРАВЛЕНО: Проверяем кандидатов не просто на существование (-f), а на наличие прав исполнения (-x)
+if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
+    PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3"
+elif [ -x "$HOME/.venv/bin/python3" ]; then
+    PYTHON_EXEC="$HOME/.venv/bin/python3"
+else
+    PYTHON_EXEC="python3"
+fi
+
+# Безопасное определение пути через сам Python-скрипт вместо текстового grep
+if [ -n "$2" ]; then
+    SHM_DIR="$2"
+    EXTRA_ARGS="--shm-dir $2"
+    LOG_DIR="$2/logs"
+else
+    # Вызываем Python для разбора JSON-конфига
+    DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
+    if [ -z "$DEFAULT_SHM" ]; then
+        echo "⚠️ Предупреждение: Не удалось запустить Python для парсинга конфигурации. Используем путь по умолчанию." >&2
+        # Задаем жесткий дефолтный путь, чтобы скрипт продолжил работу
+        DEFAULT_SHM="/dev/shm/schedule_nbc_tasks"
+    fi
+    SHM_DIR="$DEFAULT_SHM"
+    EXTRA_ARGS=""
+    LOG_DIR="/dev/shm/schedule_nbc_tasks/${ENV_NAME}/logs"
+fi
+
+LOG_FILE="$LOG_DIR/bot.log"
 
 case "$1" in
     start)
         echo "🚀 Запуск бота..."
-        init_ram_disk
+        mkdir -p "$LOG_DIR"
+        chmod 775 "$SHM_DIR" "$LOG_DIR" 2>/dev/null || true
         
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
             echo "⚠️ Бот уже запущен!"
             exit 1
-        fi
-        
-        if [ -f "$PROJECT_DIR/.venv/bin/python3" ]; then
-            PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3"
-        elif [ -f "$HOME/.venv/bin/python3" ]; then
-            PYTHON_EXEC="$HOME/.venv/bin/python3"
-        else
-            PYTHON_EXEC="python3"
-        fi
-
-        # Если передан второй аргумент (путь к SHM), приоритетно используем его
-        if [ -n "$2" ]; then
-            EXTRA_ARGS="--shm-dir $2"
-        elif [ -n "$args" ] && [[ "$args" == "--shm-dir" ]]; then
-            EXTRA_ARGS=""
-        else
-            EXTRA_ARGS=""
         fi
 
         nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
@@ -67,7 +71,7 @@ case "$1" in
     restart)
         $0 stop
         sleep 1.5
-        $0 start
+        $0 start "$2"
         ;;
         
     status)
