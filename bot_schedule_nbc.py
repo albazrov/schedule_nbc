@@ -1,7 +1,6 @@
 import asyncio
 import os
 import sys
-import argparse
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -16,19 +15,11 @@ from sch import generate_exact_schedule_fixed
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Настраиваем парсер аргументов командной строки
-parser = argparse.ArgumentParser(description="Schedule Telegram Bot")
-parser.add_argument("--shm-dir", type=str, help="Путь к временной папке в RAM-диске")
-args, unknown = parser.parse_known_args()
-
 # Загружаем стартовый конфиг
 config = load_config()
 
-# Приоритет путей: 1. Ключ запуска --shm-dir -> 2. Параметр в config.json -> 3. Дефолтный путь
-if args.shm_dir:
-    SHM_DIR = args.shm_dir
-else:
-    SHM_DIR = config.get("files", {}).get("shm_dir", "/dev/shm/schedule_nbc")
+# ДИНАМИЧЕСКИЙ ПУТЬ: Читаем путь к RAM из config.json. Если параметра нет — используем дефолт.
+SHM_DIR = config.get("files", {}).get("shm_dir", "/dev/shm/schedule_nbc")
 
 # Гарантируем наличие рабочей папки в RAM при старте
 os.makedirs(SHM_DIR, exist_ok=True)
@@ -40,7 +31,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 def rebuild_current_schedule():
-    """Перезапускает движок генерации с актуационными параметрами"""
+    """Перезапускает движок генерации с актуальными параметрами"""
     cfg = load_config()
     data_file = get_current_data_file(SHM_DIR, SCRIPT_DIR, cfg["files"]["excel_name"])
     temp_output_path = os.path.join(SHM_DIR, cfg["files"]["output_name"])
@@ -126,7 +117,6 @@ async def handle_settings_callbacks(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("scale_val:"))
 async def handle_scale_selection(callback: types.CallbackQuery):
-    # ИСПРАВЛЕНО: Забираем только элемент после двоеточия (индекс 1) вместо всего списка
     val = callback.data.split(":")[1]
     cfg = load_config()
     cfg["settings"]["force_scale"] = None if val == "auto" else float(val)
