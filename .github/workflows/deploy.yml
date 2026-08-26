@@ -27,12 +27,12 @@ jobs:
           cd /home/pi/app/schedule_nbc/test/
           chmod +x manage.sh
           
-          # 2. Мягко перезапускаем тестового бота в фоне с изолированным путем.
+          # 2. Мягко перезапускаем тестового бота в фоне с принудительным оверрайдом пути для изоляции
           env RUNNER_TRACKING_ID=0 ./manage.sh restart /dev/shm/schedule_nbc_tasks/test
           
           # 3. Проверяем, что он успешно запустился и работает
           sleep 2
-          ./manage.sh status
+          ./manage.sh status /dev/shm/schedule_nbc_tasks/test
 
       # --- ЛОГИКА ДЛЯ РАБОЧЕЙ ВЕТКИ (ПРОДАКШН) ---
       - name: Deploy to Production Branch
@@ -41,7 +41,7 @@ jobs:
           # 1. Синхронизируем код в продакшн, не затирая боевой config.json
           rsync -av --exclude='.git*' --exclude='debug.log' --exclude='config*' --exclude='allowed_users*' ./ /home/pi/app/schedule_nbc/prod/
           
-          # 2. Автоматический перезапуск продакшн-бота
+          # 2. Автоматический перезапуск продакшн-бота (он сам считает путь /dev/shm/schedule_nbc из своего config.json)
           cd /home/pi/app/schedule_nbc/prod/
           chmod +x manage.sh
           

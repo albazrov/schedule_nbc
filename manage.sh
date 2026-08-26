@@ -6,7 +6,7 @@ BOT_SCRIPT="bot_schedule_nbc.py"
 
 ENV_NAME=$(basename "$PROJECT_DIR")
 
-# ИСПРАВЛЕНО: Проверяем кандидатов не просто на существование (-f), а на наличие прав исполнения (-x)
+# Определяем бинарник Python с проверкой прав на выполнение (-x)
 if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
     PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3"
 elif [ -x "$HOME/.venv/bin/python3" ]; then
@@ -15,11 +15,11 @@ else
     PYTHON_EXEC="python3"
 fi
 
-# Безопасное определение пути через сам Python-скрипт вместо текстового grep
+# УНИВЕРСАЛЬНОЕ И БЕЗОПАСНОЕ ОПРЕДЕЛЕНИЕ ПУТИ:
+# Если передан $2 — берем его. Если нет — парсим config.json напрямую через быстрый однострочник Python.
 if [ -n "$2" ]; then
     SHM_DIR="$2"
     EXTRA_ARGS="--shm-dir $2"
-    LOG_DIR="$2/logs"
 else
     # Вызываем Python для разбора JSON-конфига
     DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
@@ -28,25 +28,27 @@ else
         # Задаем жесткий дефолтный путь, чтобы скрипт продолжил работу
         DEFAULT_SHM="/dev/shm/schedule_nbc_tasks"
     fi
-    SHM_DIR="$DEFAULT_SHM"
+    SHM_DIR=${SHM_DIR:-"/dev/shm/schedule_nbc"}
     EXTRA_ARGS=""
-    LOG_DIR="/dev/shm/schedule_nbc_tasks/${ENV_NAME}/logs"
 fi
 
-LOG_FILE="$LOG_DIR/bot.log"
+LOG_FILE="$SHM_DIR/bot_schedule_nbc.log"
 
 case "$1" in
     start)
-        echo "🚀 Запуск бота..."
-        mkdir -p "$LOG_DIR"
-        chmod 775 "$SHM_DIR" "$LOG_DIR" 2>/dev/null || true
+        echo "🚀 Запуск бота ($ENV_NAME)..."
+        mkdir -p "$SHM_DIR"
+        chmod 775 "$SHM_DIR" 2>/dev/null || true
         
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
             echo "⚠️ Бот уже запущен!"
             exit 1
         fi
 
-        nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
+        # old # nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
+        # Переменная PYTHONUNBUFFERED=1 заставляет Python мгновенно писать логи на диск
+        #env PYTHONUNBUFFERED=1 nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
+	nohup "$PYTHON_EXEC" -u "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
         
         sleep 1.5
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
@@ -58,7 +60,7 @@ case "$1" in
         ;;
         
     stop)
-        echo "🛑 Остановка бота..."
+        echo "🛑 Остановка бота ($ENV_NAME)..."
         BOT_PID=$(pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT")
         if [ -n "$BOT_PID" ]; then
             kill $BOT_PID
@@ -77,18 +79,19 @@ case "$1" in
     status)
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
             PID=$(pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" | head -n 1)
-            echo "🟢 Бот РАБОТАЕТ (PID: $PID)"
+            echo "🟢 Бот РАБОТАЕТ (PID: $PID) [$ENV_NAME]"
+            echo "📊 Активный RAM-диск: $SHM_DIR"
         else
-            echo "🔴 Бот ОСТАНОВЛЕН"
+            echo "🔴 Бот ОСТАНОВЛЕН [$ENV_NAME]"
         fi
         ;;
         
     logs)
         if [ -f "$LOG_FILE" ]; then
-            echo "📋 Вывод логов в реальном времени (нажмите Ctrl+C для выхода):"
+            echo "📋 Вывод логов в реальном времени (нажмите Ctrl+C для выхода) [$ENV_NAME]:"
             tail -f "$LOG_FILE"
         else
-            echo "❌ Файл логов еще не создан. Запустите бота."
+            echo "❌ Файл логов еще не создан по пути: $LOG_FILE"
         fi
         ;;
         
