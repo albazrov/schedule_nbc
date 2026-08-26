@@ -132,7 +132,7 @@ async def handle_settings_callbacks(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("scale_val:"))
 async def handle_scale_selection(callback: types.CallbackQuery):
-    val = callback.data.split(":")
+    val = callback.data.split(":")[1]
     cfg = load_config()
     cfg["settings"]["force_scale"] = None if val == "auto" else float(val)
     save_config(cfg)

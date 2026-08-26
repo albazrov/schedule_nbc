@@ -21,8 +21,12 @@ if [ -n "$2" ]; then
     SHM_DIR="$2"
     EXTRA_ARGS="--shm-dir $2"
 else
-    if [ -f "$PROJECT_DIR/config.json" ]; then
-        SHM_DIR=$("$PYTHON_EXEC" -c "import json; print(json.load(open('$PROJECT_DIR/config.json')).get('files', {}).get('shm_dir', '/dev/shm/schedule_nbc'))" 2>/dev/null)
+    # Вызываем Python для разбора JSON-конфига
+    DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
+    if [ -z "$DEFAULT_SHM" ]; then
+        echo "⚠️ Предупреждение: Не удалось запустить Python для парсинга конфигурации. Используем путь по умолчанию." >&2
+        # Задаем жесткий дефолтный путь, чтобы скрипт продолжил работу
+        DEFAULT_SHM="/dev/shm/schedule_nbc_tasks"
     fi
     SHM_DIR=${SHM_DIR:-"/dev/shm/schedule_nbc"}
     EXTRA_ARGS=""
