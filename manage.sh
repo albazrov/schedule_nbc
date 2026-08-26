@@ -6,16 +6,28 @@ BOT_SCRIPT="bot_schedule_nbc.py"
 
 ENV_NAME=$(basename "$PROJECT_DIR")
 
-# Читаем аргументы: если передан путь вторым параметром, приоритетно разворачиваем структуру там
+# Определяем бинарник Python
+if [ -f "$PROJECT_DIR/.venv/bin/python3" ]; then
+    PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3"
+elif [ -f "$HOME/.venv/bin/python3" ]; then
+    PYTHON_EXEC="$HOME/.venv/bin/python3"
+else
+    PYTHON_EXEC="python3"
+fi
+
+# ИСПРАВЛЕНО: Безопасное определение пути через сам Python-скрипт вместо текстового grep
 if [ -n "$2" ]; then
     SHM_DIR="$2"
     EXTRA_ARGS="--shm-dir $2"
     LOG_DIR="$2/logs"
 else
-    if [ -f "$PROJECT_DIR/config.json" ]; then
-        DEFAULT_SHM=$(grep -o '"shm_dir": "[^"]*' "$PROJECT_DIR/config.json" | cut -d'"' -f4)
+    # Вызываем Python для разбора JSON-конфига
+    DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
+    if [ -z "$DEFAULT_SHM" ]; then
+        echo "❌ Ошибка: Не удалось распарсить config.json. Проверьте синтаксис файла." >&2
+        exit 1
     fi
-    SHM_DIR=${DEFAULT_SHM:-"/dev/shm/schedule_nbc"}
+    SHM_DIR="$DEFAULT_SHM"
     EXTRA_ARGS=""
     LOG_DIR="/dev/shm/schedule_nbc_tasks/${ENV_NAME}/logs"
 fi
@@ -26,19 +38,11 @@ case "$1" in
     start)
         echo "🚀 Запуск бота..."
         mkdir -p "$LOG_DIR"
-        chmod -R 775 "$SHM_DIR" 2>/dev/null || true
+        chmod 775 "$SHM_DIR" "$LOG_DIR" 2>/dev/null || true
         
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
             echo "⚠️ Бот уже запущен!"
             exit 1
-        fi
-        
-        if [ -f "$PROJECT_DIR/.venv/bin/python3" ]; then
-            PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3"
-        elif [ -f "$HOME/.venv/bin/python3" ]; then
-            PYTHON_EXEC="$HOME/.venv/bin/python3"
-        else
-            PYTHON_EXEC="python3"
         fi
 
         nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
@@ -66,7 +70,6 @@ case "$1" in
     restart)
         $0 stop
         sleep 1.5
-        # ИСПРАВЛЕНО: Пробрасываем второй аргумент ($2) в вызов команды start
         $0 start "$2"
         ;;
         
