@@ -4,9 +4,7 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 BOT_SCRIPT="bot_schedule_nbc.py"
 
-ENV_NAME=$(basename "$PROJECT_DIR")
-
-# ИСПРАВЛЕНО: Проверяем кандидатов не просто на существование (-f), а на наличие прав исполнения (-x)
+# Определяем бинарник Python
 if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
     PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3"
 elif [ -x "$HOME/.venv/bin/python3" ]; then
@@ -15,13 +13,12 @@ else
     PYTHON_EXEC="python3"
 fi
 
-# Безопасное определение пути через сам Python-скрипт вместо текстового grep
+# Универсальное определение пути:
+# 1. Если передан $2 — берем его. 2. Если нет — запрашиваем у Python то, что прописано в config.json
 if [ -n "$2" ]; then
     SHM_DIR="$2"
     EXTRA_ARGS="--shm-dir $2"
-    LOG_DIR="$2/logs"
 else
-    # Вызываем Python для разбора JSON-конфига
     DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
     if [ -z "$DEFAULT_SHM" ]; then
         echo "❌ Ошибка: Не удалось распарсить config.json. Проверьте синтаксис файла." >&2
@@ -29,16 +26,15 @@ else
     fi
     SHM_DIR="$DEFAULT_SHM"
     EXTRA_ARGS=""
-    LOG_DIR="/dev/shm/schedule_nbc_tasks/${ENV_NAME}/logs"
 fi
 
-LOG_FILE="$LOG_DIR/bot.log"
+LOG_FILE="$SHM_DIR/bot_schedule_nbc.log"
 
 case "$1" in
     start)
         echo "🚀 Запуск бота..."
-        mkdir -p "$LOG_DIR"
-        chmod 775 "$SHM_DIR" "$LOG_DIR" 2>/dev/null || true
+        mkdir -p "$SHM_DIR"
+        chmod 775 "$SHM_DIR" 2>/dev/null || true
         
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
             echo "⚠️ Бот уже запущен!"
@@ -77,6 +73,7 @@ case "$1" in
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
             PID=$(pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" | head -n 1)
             echo "🟢 Бот РАБОТАЕТ (PID: $PID)"
+            echo "📊 Текущий RAM-диск: $SHM_DIR"
         else
             echo "🔴 Бот ОСТАНОВЛЕН"
         fi
@@ -87,7 +84,7 @@ case "$1" in
             echo "📋 Вывод логов в реальном времени (нажмите Ctrl+C для выхода):"
             tail -f "$LOG_FILE"
         else
-            echo "❌ Файл логов еще не создан. Запустите бота."
+            echo "❌ Файл логов еще не создан по пути: $LOG_FILE"
         fi
         ;;
         
