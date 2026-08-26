@@ -6,16 +6,16 @@ BOT_SCRIPT="bot_schedule_nbc.py"
 
 ENV_NAME=$(basename "$PROJECT_DIR")
 
-# Определяем бинарник Python
-if [ -f "$PROJECT_DIR/.venv/bin/python3" ]; then
+# ИСПРАВЛЕНО: Проверяем кандидатов не просто на существование (-f), а на наличие прав исполнения (-x)
+if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
     PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3"
-elif [ -f "$HOME/.venv/bin/python3" ]; then
+elif [ -x "$HOME/.venv/bin/python3" ]; then
     PYTHON_EXEC="$HOME/.venv/bin/python3"
 else
     PYTHON_EXEC="python3"
 fi
 
-# ИСПРАВЛЕНО: Безопасное определение пути через сам Python-скрипт вместо текстового grep
+# Безопасное определение пути через сам Python-скрипт вместо текстового grep
 if [ -n "$2" ]; then
     SHM_DIR="$2"
     EXTRA_ARGS="--shm-dir $2"
