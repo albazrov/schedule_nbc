@@ -1,0 +1,76 @@
+name: CI/CD schedule_nbc
+
+on:
+  push:
+    branches:
+      - test
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-and-test:
+    runs-on: [self-hosted, schedule_nbc]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- ЛОГИКА ДЛЯ ТЕСТОВОЙ ВЕТКИ ---
+      - name: Deploy and Test on Test Branch
+        if: github.ref == 'refs/heads/test'
+        run: |
+          # 1. Синхронизируем код в локальную папку /test
+          rsync -av --exclude='.git*' --exclude='config*' --exclude='allowed_users*' ./ /home/pi/app/schedule_nbc/test/
+          
+          cd /home/pi/app/schedule_nbc/test/
+          chmod +x manage.sh
+          
+          # 2. Гарантированно гасим старый тест при его наличии перед стартом нового
+          ./manage.sh stop || true
+          
+          # 3. Запуск теста
+          ./manage.sh start
+          
+          # 4. Даем боту поработать 15 секунд в его изолированном пространстве
+          sleep 15
+          
+          # 5. Проверяем статус и копируем логи из изолированного пути для отчета на GitHub
+          ./manage.sh status
+          cp /dev/shm/schedule_nbc_tasks/test/logs/bot.log ${{ github.workspace }}/debug.log
+
+      # --- ГАРАНТИРОВАННАЯ ОЧИСТКА ТЕСТОВЫХ ПРОЦЕССОВ (ВЫПОЛНЯЕТСЯ ВСЕГДА) ---
+      - name: Cleanup Test Bot Process
+        if: always() && github.ref == 'refs/heads/test'
+        run: |
+          cd /home/pi/app/schedule_nbc/test/
+          ./manage.sh stop || true
+
+      # --- ОТПРАВКА ЛОГОВ НА GITHUB ---
+      - name: Commit and Push Log to GitHub
+        if: github.ref == 'refs/heads/test'
+        run: |
+          git config --global user.name "Raspberry Runner"
+          git config --global user.email "runner@raspberry.local"
+          
+          if [ -f debug.log ]; then
+            git add debug.log
+            git commit -m "Chore: update debug.log from dynamic environment path [skip ci]" || echo "No changes"
+            git push origin test
+          fi
+
+      # --- ЛОГИКА ДЛЯ РАБОЧЕЙ ВЕТКИ (ПРОДАКШН) ---
+      - name: Deploy to Production Branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # 1. Синхронизируем код в продакшн, не затирая боевой config.json
+          rsync -av --exclude='.git*' --exclude='debug.log' --exclude='config*' --exclude='allowed_users*' ./ /home/pi/app/schedule_nbc/prod/
+          
+          # 2. Автоматический перезапуск продакшн-бота
+          cd /home/pi/app/schedule_nbc/prod/
+          chmod +x manage.sh
+          
+          env RUNNER_TRACKING_ID=0 ./manage.sh restart || echo "Failed to restart"
+          sleep 1
+          ./manage.sh status

@@ -1,0 +1,21 @@
+# Секреты и конфигурация
+allowed_users*
+config*
+
+# Файлы данных и логи
+data.txt
+data.xlsx
+bot.log
+*.log
+nohup.out
+!debug.log
+
+# Изображения и результаты тестов
+*.png
+*.jpg
+*.jpeg
+
+# Окружение и системные файлы
+__pycache__/
+*.pyc
+.DS_Store
