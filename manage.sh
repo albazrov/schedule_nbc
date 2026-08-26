@@ -4,21 +4,29 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 BOT_SCRIPT="bot_schedule_nbc.py"
 
-# Динамически определяем имя окружения (test или prod) на основе пути проекта
 ENV_NAME=$(basename "$PROJECT_DIR")
-LOG_DIR="/dev/shm/schedule_nbc_tasks/${ENV_NAME}/logs"
-LOG_FILE="$LOG_DIR/bot.log"
 
-# Функция для подготовки окружения в RAM
-init_ram_disk() {
-    mkdir -p "$LOG_DIR"
-    chmod -R 775 "/dev/shm/schedule_nbc_tasks" 2>/dev/null
-}
+# Читаем аргументы: если передан путь вторым параметром, приоритетно разворачиваем структуру там
+if [ -n "$2" ]; then
+    SHM_DIR="$2"
+    EXTRA_ARGS="--shm-dir $2"
+    LOG_DIR="$2/logs"
+else
+    if [ -f "$PROJECT_DIR/config.json" ]; then
+        DEFAULT_SHM=$(grep -o '"shm_dir": "[^"]*' "$PROJECT_DIR/config.json" | cut -d'"' -f4)
+    fi
+    SHM_DIR=${DEFAULT_SHM:-"/dev/shm/schedule_nbc"}
+    EXTRA_ARGS=""
+    LOG_DIR="/dev/shm/schedule_nbc_tasks/${ENV_NAME}/logs"
+fi
+
+LOG_FILE="$LOG_DIR/bot.log"
 
 case "$1" in
     start)
         echo "🚀 Запуск бота..."
-        init_ram_disk
+        mkdir -p "$LOG_DIR"
+        chmod -R 775 "$SHM_DIR" 2>/dev/null || true
         
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
             echo "⚠️ Бот уже запущен!"
@@ -31,15 +39,6 @@ case "$1" in
             PYTHON_EXEC="$HOME/.venv/bin/python3"
         else
             PYTHON_EXEC="python3"
-        fi
-
-        # Если передан второй аргумент (путь к SHM), приоритетно используем его
-        if [ -n "$2" ]; then
-            EXTRA_ARGS="--shm-dir $2"
-        elif [ -n "$args" ] && [[ "$args" == "--shm-dir" ]]; then
-            EXTRA_ARGS=""
-        else
-            EXTRA_ARGS=""
         fi
 
         nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
@@ -67,7 +66,8 @@ case "$1" in
     restart)
         $0 stop
         sleep 1.5
-        $0 start
+        # ИСПРАВЛЕНО: Пробрасываем второй аргумент ($2) в вызов команды start
+        $0 start "$2"
         ;;
         
     status)

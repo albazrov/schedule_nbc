@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import argparse
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -15,11 +16,19 @@ from sch import generate_exact_schedule_fixed
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Настраиваем парсер аргументов командной строки
+parser = argparse.ArgumentParser(description="Schedule Telegram Bot")
+parser.add_argument("--shm-dir", type=str, help="Путь к временной папке в RAM-диске")
+args, unknown = parser.parse_known_args()
+
 # Загружаем стартовый конфиг
 config = load_config()
 
-# ДИНАМИЧЕСКИЙ ПУТЬ: Читаем путь к RAM из config.json. Если параметра нет — используем дефолт.
-SHM_DIR = config.get("files", {}).get("shm_dir", "/dev/shm/schedule_nbc")
+# ПРИОРИТЕТ ПУТЕЙ: 1. Ключ запуска --shm-dir -> 2. Параметр в config.json -> 3. Дефолт
+if args.shm_dir:
+    SHM_DIR = args.shm_dir
+else:
+    SHM_DIR = config.get("files", {}).get("shm_dir", "/dev/shm/schedule_nbc")
 
 # Гарантируем наличие рабочей папки в RAM при старте
 os.makedirs(SHM_DIR, exist_ok=True)
