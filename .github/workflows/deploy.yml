@@ -27,25 +27,37 @@ jobs:
           cd /home/pi/app/schedule_nbc/test/
           chmod +x manage.sh
           
-          # 2. Гарантированно гасим старый тест при его наличии перед стартом нового
-          ./manage.sh stop || true
+          # 2. Гарантированно глушим старые зависшие процессы бота (подстраховка по имени файла)
+          pkill -f "bot_schedule_nbc.py" || true
           
-          # 3. Запуск теста
+          # 3. Запуск теста и сохранение его точного системного PID
           ./manage.sh start
+          sleep 2
           
-          # 4. Даем боту поработать 15 секунд в его изолированном пространстве
+          # Запоминаем PID запущенного процесса именно этой папки
+          echo $(pgrep -f "python3.*/home/pi/app/schedule_nbc/test/bot_schedule_nbc.py" | head -n 1) > runner_bot.pid
+          
+          # 4. Даем боту честно поработать 15 секунд
           sleep 15
           
-          # 5. Проверяем статус и копируем логи из изолированного пути для отчета на GitHub
-          ./manage.sh status
-          cp /dev/shm/schedule_nbc_tasks/test/logs/bot.log ${{ github.workspace }}/debug.log
+          # 5. Копируем логи из изолированного пути для отчета на GitHub
+          cp /dev/shm/schedule_nbc_tasks/test/logs/bot.log ${{ github.workspace }}/debug.log || echo "No logs found" > ${{ github.workspace }}/debug.log
 
-      # --- ГАРАНТИРОВАННАЯ ОЧИСТКА ТЕСТОВЫХ ПРОЦЕССОВ (ВЫПОЛНЯЕТСЯ ВСЕГДА) ---
+      # --- ГАРАНТИРОВАННАЯ ОЧИСТКА ТЕСТОВЫХ ПРОЦЕССОВ НА ОСНОВЕ ТОЧНОГО PID ---
       - name: Cleanup Test Bot Process
         if: always() && github.ref == 'refs/heads/test'
         run: |
           cd /home/pi/app/schedule_nbc/test/
-          ./manage.sh stop || true
+          if [ -f runner_bot.pid ]; then
+            TARGET_PID=$(cat runner_bot.pid)
+            if [ -n "$TARGET_PID" ]; then
+              echo "🛑 Принудительно завершаем тестовый процесс PID: $TARGET_PID"
+              kill -9 $TARGET_PID 2>/dev/null || true
+            fi
+            rm -f runner_bot.pid
+          fi
+          # Дополнительная жесткая очистка по маске пути
+          pkill -f "python3.*/home/pi/app/schedule_nbc/test/bot_schedule_nbc.py" || true
 
       # --- ОТПРАВКА ЛОГОВ НА GITHUB ---
       - name: Commit and Push Log to GitHub
