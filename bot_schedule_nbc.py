@@ -19,7 +19,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Настраиваем парсер аргументов командной строки
 parser = argparse.ArgumentParser(description="Schedule Telegram Bot")
 parser.add_argument("--shm-dir", type=str, help="Путь к временной папке в RAM-диске")
-parser.add_argument("--print-shm", action="store_true", help="Вывести итоговый путь SHM и выйти")
 args, unknown = parser.parse_known_args()
 
 # Загружаем стартовый конфиг
@@ -30,11 +29,6 @@ if args.shm_dir:
     SHM_DIR = args.shm_dir
 else:
     SHM_DIR = config.get("files", {}).get("shm_dir", "/dev/shm/schedule_nbc")
-
-# Если запрошен вывод пути для утилит управления — выводим его и завершаем работу
-if args.print_shm:
-    print(SHM_DIR)
-    sys.exit(0)
 
 # Гарантируем наличие рабочей папки в RAM при старте
 os.makedirs(SHM_DIR, exist_ok=True)

@@ -4,7 +4,12 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 BOT_SCRIPT="bot_schedule_nbc.py"
 
+echo "PROJECT_DIR  = $PROJECT_DIR"
+echo "BOT_SCRIPT   = $BOT_SCRIPT"
+
 ENV_NAME=$(basename "$PROJECT_DIR")
+
+echo "ENV_NAME     = $ENV_NAME"
 
 # Определяем бинарник Python с проверкой прав на выполнение (-x)
 if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
@@ -15,24 +20,28 @@ else
     PYTHON_EXEC="python3"
 fi
 
+echo "PYTHON_EXEC  = $PYTHON_EXEC"
+
 # УНИВЕРСАЛЬНОЕ И БЕЗОПАСНОЕ ОПРЕДЕЛЕНИЕ ПУТИ:
 # Если передан $2 — берем его. Если нет — парсим config.json напрямую через быстрый однострочник Python.
 if [ -n "$2" ]; then
     SHM_DIR="$2"
-    EXTRA_ARGS="--shm-dir $2"
+	EXTRA_ARGS="--shm-dir $2"
 else
     # Вызываем Python для разбора JSON-конфига
-    DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
-    if [ -z "$DEFAULT_SHM" ]; then
-        echo "⚠️ Предупреждение: Не удалось запустить Python для парсинга конфигурации. Используем путь по умолчанию." >&2
-        # Задаем жесткий дефолтный путь, чтобы скрипт продолжил работу
-        DEFAULT_SHM="/dev/shm/schedule_nbc_tasks"
-    fi
-    SHM_DIR=${SHM_DIR:-"/dev/shm/schedule_nbc"}
-    EXTRA_ARGS=""
+    #DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
+    #if [ -z "$DEFAULT_SHM" ]; then
+    #    echo "⚠️ Предупреждение: Не удалось запустить Python для парсинга конфигурации. Используем путь по умолчанию." >&2
+    #    # Задаем жесткий дефолтный путь, чтобы скрипт продолжил работу
+    #    DEFAULT_SHM="/dev/shm/schedule_nbc_tasks"
+    #fi
+    SHM_DIR=${SHM_DIR:-"/dev/shm/schedule_nbc/$ENV_NAME"}
+    EXTRA_ARGS="--shm-dir $SHM_DIR"
 fi
+echo "EXTRA_ARGS   = $EXTRA_ARGS"
 
 LOG_FILE="$SHM_DIR/bot_schedule_nbc.log"
+echo "LOG_FILE     = $LOG_FILE"
 
 case "$1" in
     start)
@@ -48,7 +57,7 @@ case "$1" in
         # old # nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
         # Переменная PYTHONUNBUFFERED=1 заставляет Python мгновенно писать логи на диск
         #env PYTHONUNBUFFERED=1 nohup "$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
-	nohup "$PYTHON_EXEC" -u "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
+	    nohup "$PYTHON_EXEC" -u "$PROJECT_DIR/$BOT_SCRIPT" $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
         
         sleep 1.5
         if pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" > /dev/null; then
@@ -81,6 +90,7 @@ case "$1" in
             PID=$(pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" | head -n 1)
             echo "🟢 Бот РАБОТАЕТ (PID: $PID) [$ENV_NAME]"
             echo "📊 Активный RAM-диск: $SHM_DIR"
+			echo "✏️ Лог файл: $LOG_FILE"
         else
             echo "🔴 Бот ОСТАНОВЛЕН [$ENV_NAME]"
         fi
@@ -89,7 +99,7 @@ case "$1" in
     logs)
         if [ -f "$LOG_FILE" ]; then
             echo "📋 Вывод логов в реальном времени (нажмите Ctrl+C для выхода) [$ENV_NAME]:"
-            tail -f "$LOG_FILE"
+            tail -n 10 -f "$LOG_FILE"
         else
             echo "❌ Файл логов еще не создан по пути: $LOG_FILE"
         fi
