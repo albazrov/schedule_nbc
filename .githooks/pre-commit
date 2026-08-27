@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# pre-commit: блокирует коммит, если в staged-файлах найдены реальные секреты.
+# Blocks the commit when staged files contain real-looking secrets.
+#
+# Установка / Install:  ./scripts/install-hooks.sh
+# Пропустить один раз (НЕ рекомендуется) / skip once:  git commit --no-verify
+#
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCANNER="$REPO_ROOT/scripts/check_secrets.py"
+
+if [ ! -f "$SCANNER" ]; then
+    echo "[pre-commit] ⚠️  Не найден $SCANNER — проверка секретов пропущена."
+    echo "[pre-commit] ⚠️  Scanner not found, skipping the secret check."
+    exit 0
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+elif command -v python >/dev/null 2>&1; then
+    PYTHON=python
+else
+    echo "[pre-commit] ⚠️  Python не найден — проверка секретов пропущена."
+    echo "[pre-commit] ⚠️  Python not found, skipping the secret check."
+    exit 0
+fi
+
+echo "[pre-commit] Проверка секретов / scanning for secrets…"
+
+if ! "$PYTHON" "$SCANNER" --staged; then
+    echo ""
+    echo "[pre-commit] ❌ Коммит отклонён / commit rejected."
+    exit 1
+fi
+
+exit 0

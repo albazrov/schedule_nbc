@@ -37,7 +37,8 @@ python3 migrate_config.py
 - ✅ Прочитает старый `config.json`
 - ✅ Разделит его на два файла
 - ✅ Создаст `config_secret.json` с вашими приватными данными
-- ✅ Создаст `config_secret.json.example` для других пользователей
+- ✅ Создаст `config_secret.json.example` для других пользователей —
+  **только с плейсхолдерами**, реальные токены и ID в шаблон не переносятся
 - ✅ Сделает резервную копию старого конфига
 
 ### Шаг 3: Проверьте результат
@@ -51,6 +52,9 @@ ls -la config_*.json
 
 ### Шаг 4: Подтвердите что всё работает
 ```bash
+# Убедитесь, что в шаблоне не осталось реальных секретов
+python3 scripts/check_secrets.py config_secret.json.example
+
 # Проверьте что конфиги валидны
 python3 -c "from modules.config_loader import load_config_defaults; print('✅ config_defaults.json OK')"
 python3 -c "from modules.config_loader import load_config_secret; print('✅ config_secret.json OK')"
@@ -221,7 +225,7 @@ python3 -m json.tool config_secret.json
 ```bash
 # Убедитесь что заполнили config_secret.json:
 grep -i "token" config_secret.json
-# Должно быть значение, не "YOUR_BOT_TOKEN_HERE"
+# Должно быть реальное значение, не "REPLACE_WITH_TELEGRAM_BOT_TOKEN"
 ```
 
 ### Ошибка: "RAM-диск недоступен"

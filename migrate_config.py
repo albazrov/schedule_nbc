@@ -129,12 +129,12 @@ def extract_secrets(old_config):
     
     secrets = {
         "telegram_bot": old_config.get("telegram_bot", {
-            "token": "YOUR_BOT_TOKEN_HERE",
-            "admin_id": 123456789,
+            "token": "REPLACE_WITH_TELEGRAM_BOT_TOKEN",
+            "admin_id": 0,
             "allowed_users": []
         }),
         "openai_api": old_config.get("openai_api", {
-            "api_key": "sk-your-api-key-here"
+            "api_key": "REPLACE_WITH_OPENAI_API_KEY"
         }),
         "environments": {
             "production": {
@@ -151,8 +151,51 @@ def extract_secrets(old_config):
     # Пытаемся извлечь окружения если они были в старом конфиге
     if "shm_dir" in old_config:
         secrets["environments"]["production"]["shm_dir"] = old_config["shm_dir"]
-    
+
     return secrets
+
+
+def build_example_template(secrets):
+    """
+    Строит config_secret.json.example из структуры приватного конфига,
+    заменяя ВСЕ чувствительные значения на плейсхолдеры.
+
+    Этот файл принудительно трекается git-ом (`!config_secret.json.example`
+    в .gitignore) и уходит в GitHub, поэтому реальные токены, ID и ключи
+    в него попадать не должны — сохраняется только форма структуры.
+    """
+    return {
+        "_WARNING": (
+            "⚠️ ЭТО ШАБЛОН — НЕ ВПИСЫВАЙТЕ СЮДА РЕАЛЬНЫЕ ТОКЕНЫ! "
+            "ЭТОТ ФАЙЛ ХРАНИТСЯ В GITHUB. / TEMPLATE ONLY — NEVER PUT REAL "
+            "SECRETS HERE, THIS FILE IS COMMITTED TO GITHUB."
+        ),
+        "_HOWTO": (
+            "cp config_secret.json.example config_secret.json && "
+            "chmod 600 config_secret.json — заполняйте ТОЛЬКО config_secret.json, "
+            "он в .gitignore. / Fill in config_secret.json only; it is gitignored."
+        ),
+        "_CHECK": (
+            "Файл проверяется скриптом scripts/check_secrets.py (pre-commit хук + CI). "
+            "Коммит с реальным токеном будет заблокирован. / Validated by "
+            "scripts/check_secrets.py in the pre-commit hook and CI."
+        ),
+        "_LEAKED": (
+            "Если реальный токен всё же попал в git — сначала отзовите его "
+            "(@BotFather /revoke, OpenAI dashboard), удаления коммита недостаточно. / "
+            "If a real token leaked, revoke it first; deleting the commit is not enough."
+        ),
+        "telegram_bot": {
+            "token": "REPLACE_WITH_TELEGRAM_BOT_TOKEN",
+            "admin_id": 0,
+            "allowed_users": []
+        },
+        "openai_api": {
+            "api_key": "REPLACE_WITH_OPENAI_API_KEY"
+        },
+        # Пути к RAM-диску секретом не являются — переносим как есть
+        "environments": secrets.get("environments", {})
+    }
 
 def save_config_file(filename, data, script_dir, dry_run=False):
     """Сохраняет файл конфигурации"""
@@ -242,7 +285,13 @@ def migrate_config(old_config_path, script_dir, dry_run=False):
         print_info("config_secret.json.example уже существует")
     else:
         if not dry_run:
-            save_config_file("config_secret.json.example", secrets, script_dir, dry_run)
+            # ВАЖНО: в шаблон уходят только плейсхолдеры — файл трекается git-ом
+            save_config_file(
+                "config_secret.json.example",
+                build_example_template(secrets),
+                script_dir,
+                dry_run,
+            )
     
     # 7. Итоговая информация
     print_header("РЕЗУЛЬТАТЫ МИГРАЦИИ")

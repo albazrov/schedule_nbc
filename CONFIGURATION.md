@@ -36,7 +36,20 @@ cd schedule_nbc
 ### Шаг 2: Создаём приватный конфиг из шаблона
 ```bash
 cp config_secret.json.example config_secret.json
+chmod 600 config_secret.json
 ```
+
+> ⚠️ **Редактируйте только `config_secret.json`.**
+> Файл `config_secret.json.example` принудительно отслеживается git-ом
+> (`!config_secret.json.example` в `.gitignore`) и уходит в GitHub — в нём
+> допустимы **только плейсхолдеры**. Реальный токен, вписанный в `.example`,
+> будет опубликован.
+
+### Шаг 2.1: Установите git-хуки (один раз)
+```bash
+./scripts/install-hooks.sh
+```
+Хук `pre-commit` заблокирует коммит, если в staged-файлах найдены реальные секреты.
 
 ### Шаг 3: Заполняем `config_secret.json`
 Откройте файл в редакторе и заполните все поля:
@@ -44,12 +57,12 @@ cp config_secret.json.example config_secret.json
 ```json
 {
   "telegram_bot": {
-    "token": "YOUR_BOT_TOKEN_HERE",      // ← Вставьте токен от @BotFather
-    "admin_id": 123456789,                // ← Ваш Telegram ID
-    "allowed_users": [123456789]          // ← ID разрешённых пользователей
+    "token": "REPLACE_WITH_TELEGRAM_BOT_TOKEN",  // ← Вставьте токен от @BotFather
+    "admin_id": 0,                        // ← Ваш Telegram ID
+    "allowed_users": []                   // ← ID разрешённых пользователей
   },
   "openai_api": {
-    "api_key": "sk-your-api-key-here"     // ← API ключ для ChatGPT (опционально, если будете использовать AI)
+    "api_key": "REPLACE_WITH_OPENAI_API_KEY"  // ← API ключ для ChatGPT (опционально, если будете использовать AI)
   },
   "environments": {
     "production": {
@@ -165,7 +178,57 @@ pip install -r requirements.txt
 ### `.gitignore` исключает:
 - ❌ `config_secret.json` — никогда не будет в GitHub
 - ✅ `config_defaults.json` — всегда будет в GitHub
-- ✅ `config_secret.json.example` — шаблон для новых установок
+- ⚠️ `config_secret.json.example` — шаблон для новых установок, **принудительно
+  отслеживается** git-ом и попадает в GitHub при любом изменении
+
+### Автоматическая защита от утечки секретов
+
+Так как `.example` трекается принудительно, ошибка «вписал токен не в тот файл»
+приводит к публикации секрета. Поэтому в проекте три рубежа защиты:
+
+| Рубеж | Что делает | Когда срабатывает |
+|-------|-----------|-------------------|
+| `scripts/check_secrets.py` | Сканер: сигнатуры токенов + валидация шаблона | Вручную / из хука / из CI |
+| `.githooks/pre-commit` | Блокирует локальный коммит | `git commit` |
+| `.github/workflows/secret-scan.yml` | Блокирует push и PR | GitHub Actions |
+
+**Установка (один раз после клонирования):**
+```bash
+./scripts/install-hooks.sh
+```
+
+**Ручная проверка:**
+```bash
+python3 scripts/check_secrets.py --all       # все отслеживаемые файлы
+python3 scripts/check_secrets.py --staged    # только staged-файлы
+python3 scripts/check_secrets.py path/to/file
+```
+
+**Что именно проверяется:**
+1. `config_secret.json.example` содержит только плейсхолдеры
+   (`REPLACE_WITH_*`), обязательный ключ `_WARNING` и пустой `allowed_users`.
+2. `config_secret.json` и `.env` не попали под контроль git.
+3. Ни один файл не содержит сигнатур реальных секретов: Telegram-токен
+   (`<id>:AA...`), ключи OpenAI / GitHub / AWS / Slack / Google, блоки
+   приватных ключей.
+4. В любом `*.json` поля `token` / `api_key` / `secret` / `password`
+   содержат плейсхолдеры.
+
+**Ложное срабатывание** — добавьте в ту же строку комментарий
+`pragma: allowlist secret`.
+
+**Обход хука** (`git commit --no-verify`) возможен, но CI всё равно
+остановит push — это осознанная избыточность.
+
+> 🔥 **Если реальный токен всё же был запушен** — сначала **отзовите** его
+> (`@BotFather` → `/revoke`, OpenAI dashboard → Revoke key), и только потом
+> чистите историю. Удаление коммита не помогает: секрет уже в кэше GitHub,
+> в форках и у тех, кто успел склонировать.
+
+### Валидация на старте
+`config_loader.get_telegram_config()` падает с понятной ошибкой, если `token`
+или `admin_id` остались плейсхолдерами из шаблона —
+незаполненный конфиг не «протечёт» в рантайм молча.
 
 ### Права доступа
 При сохранении `config_secret.json` устанавливаются права `0o600`:

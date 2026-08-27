@@ -19,6 +19,10 @@ schedule_output_*.png
 schedule_output.png
 
 # Публичные конфиги хранятся в репозитории
+# ВНИМАНИЕ: config_secret.json.example принудительно трекается — в нём
+# допустимы ТОЛЬКО плейсхолдеры. Реальные значения пишите в config_secret.json.
+# WARNING: the example template is force-tracked — placeholders only.
+# Проверяется: scripts/check_secrets.py (pre-commit хук + .github/workflows/secret-scan.yml)
 !config_defaults.json
 !config_secret.json.example
 
@@ -26,6 +30,9 @@ schedule_output.png
 __pycache__/
 *.pyc
 .DS_Store
+# AppleDouble-спутники macOS на exFAT/сетевых томах (._config_secret.json и т.п.)
+# macOS AppleDouble sidecars — never commit them
+._*
 .venv/
 venv/
 env/

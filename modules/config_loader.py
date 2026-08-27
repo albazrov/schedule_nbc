@@ -9,6 +9,34 @@ def get_script_dir():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+# Значения-плейсхолдеры из config_secret.json.example. Если они дошли до
+# рантайма — значит шаблон скопировали, но не заполнили (или, что хуже,
+# правят сам .example вместо config_secret.json).
+_PLACEHOLDER_MARKERS = ("replace_with", "your_", "your-", "_here", "-here", "placeholder")
+
+
+def is_placeholder_value(value):
+    """
+    Проверяет, что значение осталось шаблонным и не является реальным секретом.
+
+    Args:
+        value: проверяемое значение (str/int/None)
+
+    Returns:
+        bool: True если это плейсхолдер из config_secret.json.example
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            return True
+        return any(marker in normalized for marker in _PLACEHOLDER_MARKERS)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value in (0, 123456789, 987654321)
+    return False
+
+
 def load_config_defaults(script_dir=None):
     """
     Загружает публичную конфигурацию (синхронизируется с GitHub).
@@ -239,9 +267,23 @@ def get_telegram_config(script_dir=None):
     
     required_keys = ["token", "admin_id"]
     for key in required_keys:
-        if key not in telegram_cfg or not telegram_cfg[key]:
+        if key not in telegram_cfg:
             raise ValueError(f"\n[!] Отсутствует обязательный параметр: telegram_bot.{key}")
-    
+
+        # Незаполненный шаблон: значение осталось таким же, как в .example.
+        # Проверяем до проверки на пустоту — admin_id=0 из шаблона тоже "пустой",
+        # но причина конкретнее и подсказка полезнее.
+        if is_placeholder_value(telegram_cfg[key]):
+            raise ValueError(
+                f"\n[!] Параметр telegram_bot.{key} содержит значение-плейсхолдер "
+                f"из config_secret.json.example\n"
+                f"[!] Заполните config_secret.json реальными данными "
+                f"(НЕ редактируйте .example — он хранится в GitHub)"
+            )
+
+        if not telegram_cfg[key]:
+            raise ValueError(f"\n[!] Отсутствует обязательный параметр: telegram_bot.{key}")
+
     return telegram_cfg
 
 
@@ -253,10 +295,20 @@ def get_openai_config(script_dir=None):
         script_dir: директория проекта (если None, используется текущая)
     
     Returns:
-        dict: конфигурация OpenAI с ключом api_key (может быть пустой если AI отключен)
+        dict: конфигурация OpenAI с ключом api_key (может быть пустой если AI отключен
+              или если ключ остался плейсхолдером из шаблона)
     """
     secret_cfg = load_config_secret(script_dir)
-    return secret_cfg.get("openai_api", {})
+    openai_cfg = dict(secret_cfg.get("openai_api", {}))
+
+    if "api_key" in openai_cfg and is_placeholder_value(openai_cfg["api_key"]):
+        print(
+            "⚠️  [NOTICE] openai_api.api_key в config_secret.json — плейсхолдер, AI отключён.\n"
+            "⚠️  [NOTICE] Впишите реальный ключ в config_secret.json (НЕ в .example)."
+        )
+        openai_cfg.pop("api_key")
+
+    return openai_cfg
 
 
 def get_template_config(template_name, script_dir=None):

@@ -17,12 +17,24 @@ git clone https://github.com/albazrov/schedule_nbc.git
 cd schedule_nbc
 ```
 
-#### Шаг 2: Создайте приватный конфиг
+#### Шаг 2: Установите git-хуки (один раз)
+```bash
+./scripts/install-hooks.sh
+```
+Хук `pre-commit` блокирует коммит с реальными секретами. Подробнее —
+[«Автоматическая защита от утечки секретов»](CONFIGURATION.md#автоматическая-защита-от-утечки-секретов).
+
+#### Шаг 3: Создайте приватный конфиг
 ```bash
 cp config_secret.json.example config_secret.json
+chmod 600 config_secret.json
 ```
 
-#### Шаг 3: Заполните приватные данные
+> ⚠️ Заполняйте **только** `config_secret.json`.
+> `config_secret.json.example` уходит в GitHub — реальный токен в нём
+> будет опубликован.
+
+#### Шаг 4: Заполните приватные данные
 ```bash
 nano config_secret.json
 ```
@@ -31,12 +43,12 @@ nano config_secret.json
 - `telegram_bot.token` — Получите у @BotFather
 - `telegram_bot.admin_id` — Ваш Telegram ID
 
-#### Шаг 4: Установите зависимости
+#### Шаг 5: Установите зависимости
 ```bash
 pip install -r requirements.txt
 ```
 
-#### Шаг 5: Запустите бота
+#### Шаг 6: Запустите бота
 ```bash
 ./manage.sh start
 ```
@@ -71,8 +83,14 @@ schedule_nbc/
 │
 ├── config_defaults.json           # Публичная конфигурация (в GitHub)
 ├── config_secret.json             # Приватная конфигурация (НЕ в GitHub)
-├── config_secret.json.example     # Шаблон приватного конфига
+├── config_secret.json.example     # Шаблон приватного конфига (ТОЛЬКО плейсхолдеры!)
 ├── .gitignore                     # Исключение приватных файлов
+│
+├── scripts/
+│   ├── check_secrets.py           # Сканер секретов (NEW!)
+│   └── install-hooks.sh           # Установка git-хуков (NEW!)
+├── .githooks/
+│   └── pre-commit                 # Блокирует коммит с секретами (NEW!)
 │
 ├── bot_schedule_nbc.py            # Главный бот (Telegram)
 ├── sch.py                         # Логика генерации расписаний
