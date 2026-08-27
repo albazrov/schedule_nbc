@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 
 
@@ -100,7 +101,16 @@ def save_config_defaults(config, script_dir=None):
 def save_config_secret(config, script_dir=None):
     """
     Сохраняет приватную конфигурацию в config_secret.json.
-    
+
+    Файл создаётся атомарно с правами 0600 (только владелец может
+    читать/писать) — режим доступа устанавливается уже в момент
+    создания дескриптора, до записи каких-либо данных, чтобы не
+    оставлять окно, в котором секреты доступны для чтения другим
+    пользователям системы. Если файл уже существовал (в т.ч. с более
+    широкими правами или как symlink), он безопасно заменяется через
+    временный файл и atomic rename, так что права 0600 сохраняются и
+    при перезаписи.
+
     Args:
         config: dict с конфигурацией
         script_dir: директория проекта (если None, используется текущая)
@@ -112,29 +122,40 @@ def save_config_secret(config, script_dir=None):
         script_dir = get_script_dir()
     
     config_path = os.path.join(script_dir, "config_secret.json")
-    tmp_path = config_path + ".tmp"
+    tmp_path = None
     try:
-        # O_CREAT|O_EXCL + mode=0o600: дескриптор создаётся сразу с
-        # ограниченными правами, никакой процесс не может открыть файл
-        # между созданием и chmod, потому что chmod здесь не нужен —
-        # права выставляются атомарно в момент open().
-        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_TRUNC, 0o600)
+        # Уникальное имя временного файла для каждой попытки (в той же
+        # директории, чтобы os.replace ниже был атомарным): если
+        # процесс упадёт до os.replace, файл с фиксированным именем
+        # ".tmp" не остаётся зависшим и не блокирует последующие
+        # сохранения через O_EXCL. tempfile.mkstemp создаёт файл с
+        # правами 0600 (POSIX) уже в момент открытия дескриптора — до
+        # записи каких-либо данных, так что окна с более широкими
+        # правами не возникает.
+        fd, tmp_path = tempfile.mkstemp(
+            dir=script_dir, prefix=".config_secret.", suffix=".tmp"
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
-        except BaseException:
-            os.unlink(tmp_path)
-            raise
- 
-        # Явно фиксируем режим ещё раз перед заменой на случай, если
-        # umask или ФС повлияли на итоговые биты (защитный дубль).
-        os.chmod(tmp_path, 0o600)
-        # Atomic rename: заменяет целевой файл целиком (включая его
-        # старые права), новый файл на диске появляется уже с 0600 —
-        # окна с более широкими правами не возникает.
-        os.replace(tmp_path, config_path)
+
+            # Явно фиксируем режим ещё раз перед заменой на случай, если
+            # umask или ФС повлияли на итоговые биты (защитный дубль).
+            os.chmod(tmp_path, 0o600)
+            # Atomic rename: заменяет целевой файл целиком (включая его
+            # старые права), новый файл на диске появляется уже с 0600 —
+            # окна с более широкими правами не возникает.
+            os.replace(tmp_path, config_path)
+            tmp_path = None  # успешно перемещён — больше не наш файл
+        finally:
+            # Любой не-успешный путь (исключение при записи/chmod/replace)
+            # должен убрать временный файл, чтобы не оставлять секреты
+            # на диске и не засорять директорию.
+            if tmp_path is not None and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
         print(f"✅ Приватная конфигурация сохранена: {config_path}")
     except IOError as e:
         raise IOError(f"Ошибка при сохранении {config_path}: {e}")
@@ -243,7 +264,7 @@ def get_template_config(template_name, script_dir=None):
     Получает конфигурацию конкретного шаблона.
     
     Args:
-        template_name: ��мя шаблона (например "template_16_9" или "template_1_1")
+        template_name: имя шаблона (например "template_16_9" или "template_1_1")
         script_dir: директория проекта (если None, используется текущая)
     
     Returns:
