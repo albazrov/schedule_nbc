@@ -1,6 +1,9 @@
-# Секреты и конфигурация
-allowed_users*
-config*
+# Секреты и чувствительные данные
+config_secret.json
+config_secret*.json
+.env
+.env.local
+.env*.local
 
 # Файлы данных и логи
 data.txt
@@ -10,12 +13,26 @@ bot.log
 nohup.out
 !debug.log
 
-# Изображения и результаты тестов
-*.png
-*.jpg
-*.jpeg
+# Изображения результатов (только выходные, но НЕ шаблоны)
+расписание_*.png
+schedule_output_*.png
+schedule_output.png
+
+# Публичные конфиги хранятся в репозитории
+!config_defaults.json
+!config_secret.json.example
 
 # Окружение и системные файлы
 __pycache__/
 *.pyc
 .DS_Store
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
