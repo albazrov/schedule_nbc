@@ -4,12 +4,12 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 BOT_SCRIPT="bot_schedule_nbc.py"
 
-echo "PROJECT_DIR = $PROJECT_DIR"
-echo "BOT_SCRIPT  = $BOT_SCRIPT"
+echo "PROJECT_DIR  = $PROJECT_DIR"
+echo "BOT_SCRIPT   = $BOT_SCRIPT"
 
 ENV_NAME=$(basename "$PROJECT_DIR")
 
-echo "ENV_NAME    = $ENV_NAME"
+echo "ENV_NAME     = $ENV_NAME"
 
 # Определяем бинарник Python с проверкой прав на выполнение (-x)
 if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
@@ -35,13 +35,13 @@ else
     #    # Задаем жесткий дефолтный путь, чтобы скрипт продолжил работу
     #    DEFAULT_SHM="/dev/shm/schedule_nbc_tasks"
     #fi
-    SHM_DIR=${SHM_DIR:-"/dev/shm/$ENV_NAME/schedule_nbc"}
+    SHM_DIR=${SHM_DIR:-"/dev/shm/schedule_nbc/$ENV_NAME"}
     EXTRA_ARGS=""
 fi
-
 echo "EXTRA_ARGS   = $EXTRA_ARGS"
 
 LOG_FILE="$SHM_DIR/bot_schedule_nbc.log"
+echo "LOG_FILE     = $LOG_FILE"
 
 case "$1" in
     start)
