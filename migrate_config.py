@@ -154,7 +154,6 @@ def extract_secrets(old_config):
     
     return secrets
 
-
 def save_config_file(filename, data, script_dir, dry_run=False):
     """Сохраняет файл конфигурации"""
     filepath = os.path.join(script_dir, filename)
@@ -165,21 +164,22 @@ def save_config_file(filename, data, script_dir, dry_run=False):
         return True
     
     try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        
-        # Устанавливаем ограниченные права для приватного конфига
         if "secret" in filename:
-            os.chmod(filepath, 0o600)
+            # Приватный конфиг: атомарная запись с правами 0600,
+            # установленными с момента создания файла — без окна,
+            # в котором секреты доступны для чтения другим пользователям,
+            # и с сохранением 0600 даже если файл уже существовал.
+            _write_secret_atomically(filepath, data)
             print_success(f"Создан {filename} (права: 0o600)")
         else:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
             print_success(f"Создан {filename}")
         
         return True
     except Exception as e:
         print_error(f"Не удалось сохранить {filename}: {e}")
         return False
-
 
 def migrate_config(old_config_path, script_dir, dry_run=False):
     """Главная функция миграции"""
