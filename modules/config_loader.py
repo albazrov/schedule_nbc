@@ -112,13 +112,33 @@ def save_config_secret(config, script_dir=None):
         script_dir = get_script_dir()
     
     config_path = os.path.join(script_dir, "config_secret.json")
+    tmp_path = config_path + ".tmp"
     try:
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
-        # Ограничиваем права доступа для приватного файла (только владелец может читать)
-        os.chmod(config_path, 0o600)
+        # O_CREAT|O_EXCL + mode=0o600: дескриптор создаётся сразу с
+        # ограниченными правами, никакой процесс не может открыть файл
+        # между созданием и chmod, потому что chmod здесь не нужен —
+        # права выставляются атомарно в момент open().
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+        except BaseException:
+            os.unlink(tmp_path)
+            raise
+ 
+        # Явно фиксируем режим ещё раз перед заменой на случай, если
+        # umask или ФС повлияли на итоговые биты (защитный дубль).
+        os.chmod(tmp_path, 0o600)
+        # Atomic rename: заменяет целевой файл целиком (включая его
+        # старые права), новый файл на диске появляется уже с 0600 —
+        # окна с более широкими правами не возникает.
+        os.replace(tmp_path, config_path)
         print(f"✅ Приватная конфигурация сохранена: {config_path}")
     except IOError as e:
+        raise IOError(f"Ошибка при сохранении {config_path}: {e}")
+    except OSError as e:
         raise IOError(f"Ошибка при сохранении {config_path}: {e}")
 
 
