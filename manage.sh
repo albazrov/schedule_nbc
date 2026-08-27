@@ -26,7 +26,7 @@ echo "PYTHON_EXEC  = $PYTHON_EXEC"
 # Если передан $2 — берем его. Если нет — парсим config.json напрямую через быстрый однострочник Python.
 if [ -n "$2" ]; then
     SHM_DIR="$2"
-    EXTRA_ARGS="--shm-dir $2"
+	EXTRA_ARGS="--shm-dir $2"
 else
     # Вызываем Python для разбора JSON-конфига
     #DEFAULT_SHM=$("$PYTHON_EXEC" "$PROJECT_DIR/$BOT_SCRIPT" --print-shm 2>/dev/null)
@@ -36,7 +36,7 @@ else
     #    DEFAULT_SHM="/dev/shm/schedule_nbc_tasks"
     #fi
     SHM_DIR=${SHM_DIR:-"/dev/shm/schedule_nbc/$ENV_NAME"}
-    EXTRA_ARGS=""
+    EXTRA_ARGS="--shm-dir $SHM_DIR"
 fi
 echo "EXTRA_ARGS   = $EXTRA_ARGS"
 
@@ -90,6 +90,7 @@ case "$1" in
             PID=$(pgrep -f "python3.*$PROJECT_DIR/$BOT_SCRIPT" | head -n 1)
             echo "🟢 Бот РАБОТАЕТ (PID: $PID) [$ENV_NAME]"
             echo "📊 Активный RAM-диск: $SHM_DIR"
+			echo "✏️ Лог файл: $LOG_FILE"
         else
             echo "🔴 Бот ОСТАНОВЛЕН [$ENV_NAME]"
         fi
@@ -98,7 +99,7 @@ case "$1" in
     logs)
         if [ -f "$LOG_FILE" ]; then
             echo "📋 Вывод логов в реальном времени (нажмите Ctrl+C для выхода) [$ENV_NAME]:"
-            tail -f "$LOG_FILE"
+            tail -n 10 -f "$LOG_FILE"
         else
             echo "❌ Файл логов еще не создан по пути: $LOG_FILE"
         fi
