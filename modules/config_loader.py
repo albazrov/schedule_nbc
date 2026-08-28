@@ -265,24 +265,7 @@ def get_telegram_config(script_dir=None):
             "[!] Пожалуйста, заполните config_secret.json используя config_secret.json.example как шаблон"
         )
     
-    required_keys = ["token", "admin_id"]
-    for key in required_keys:
-        if key not in telegram_cfg:
-            raise ValueError(f"\n[!] Отсутствует обязательный параметр: telegram_bot.{key}")
 
-        # Незаполненный шаблон: значение осталось таким же, как в .example.
-        # Проверяем до проверки на пустоту — admin_id=0 из шаблона тоже "пустой",
-        # но причина конкретнее и подсказка полезнее.
-        if is_placeholder_value(telegram_cfg[key]):
-            raise ValueError(
-                f"\n[!] Параметр telegram_bot.{key} содержит значение-плейсхолдер "
-                f"из config_secret.json.example\n"
-                f"[!] Заполните config_secret.json реальными данными "
-                f"(НЕ редактируйте .example — он хранится в GitHub)"
-            )
-
-        if not telegram_cfg[key]:
-            raise ValueError(f"\n[!] Отсутствует обязательный параметр: telegram_bot.{key}")
 
     return telegram_cfg
 
