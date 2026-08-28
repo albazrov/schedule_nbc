@@ -117,24 +117,12 @@ def scan(paths, reader):
         except Exception:
             continue
 
-        # Для путей из истории вида `sha:path` отсекаем префикс коммита,
-        # чтобы проверки структуры файлов (например, .json) ориентировались на имя файла.
+        # Очищаем путь от префикса коммита 'sha:', если мы читаем из истории,
+        # чтобы внутренние проверки расширений в scan_patterns не ломались.
         clean_path = path.split(":", 1)[1] if ":" in path and not os.path.exists(path) else path
-        name = os.path.basename(clean_path)
 
-        # 2. Проверяем шаблон-пример
-        if name == TEMPLATE_FILE:
-            findings.extend(check_template(path, text))
-        
-        # 3. Проверяем структуру JSON-файлов
-        elif clean_path.lower().endswith(".json"):
-            # Если у вас в скрипте функция называется scan_json_fields:
-            if "scan_json_fields" in globals():
-                findings.extend(scan_json_fields(path, text))
-
-        # 4. Сканируем текст регулярными выражениями на наличие токенов
-        if "scan_patterns" in globals():
-            findings.extend(scan_patterns(path, text))
+        # Передаем управление оригинальной функции поиска паттернов секретов
+        findings.extend(scan_patterns(clean_path, text))
 
     return findings
 
