@@ -105,7 +105,9 @@ def scan_patterns(path, text):
     return []
 
 def scan(paths, reader):
+    # 1. Проверяем имена файлов (блокирует .env.* и config_secret.json во всех ревизиях)
     findings = list(check_forbidden_tracked(paths))
+
     for path in paths:
         data = reader(path)
         if data is None or looks_binary(path, data):
@@ -114,7 +116,26 @@ def scan(paths, reader):
             text = data.decode("utf-8", errors="replace")
         except Exception:
             continue
-        # Дополнительные проверки содержимого (scan_patterns и т.д.) можно вызвать здесь
+
+        # Для путей из истории вида `sha:path` отсекаем префикс коммита,
+        # чтобы проверки структуры файлов (например, .json) ориентировались на имя файла.
+        clean_path = path.split(":", 1)[1] if ":" in path and not os.path.exists(path) else path
+        name = os.path.basename(clean_path)
+
+        # 2. Проверяем шаблон-пример
+        if name == TEMPLATE_FILE:
+            findings.extend(check_template(path, text))
+        
+        # 3. Проверяем структуру JSON-файлов
+        elif clean_path.lower().endswith(".json"):
+            # Если у вас в скрипте функция называется scan_json_fields:
+            if "scan_json_fields" in globals():
+                findings.extend(scan_json_fields(path, text))
+
+        # 4. Сканируем текст регулярными выражениями на наличие токенов
+        if "scan_patterns" in globals():
+            findings.extend(scan_patterns(path, text))
+
     return findings
 
 def main(argv=None):
