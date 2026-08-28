@@ -7,7 +7,7 @@ import os
 import re
 import subprocess
 import sys
-from collections import NamedTuple
+from typing import NamedTuple
 
 # Структура для хранения информации о найденном секрете
 Finding = NamedTuple("Finding", [("path", str), ("line_num", type(None)), ("check_name", str), ("description", str)])
