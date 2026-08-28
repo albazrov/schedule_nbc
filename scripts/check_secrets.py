@@ -38,12 +38,9 @@ import subprocess
 import sys
 
 # --- Файлы, которые никогда не должны быть под контролем git -----------------
-
-FORBIDDEN_TRACKED_FILES = (
-    "config_secret.json",
-    ".env",
-    ".env.local",
-)
+# Паттерн для поиска любых файлов .env, включая .env.production, .env.local и т.д.
+ENV_FILE_PATTERN = re.compile(r'(^|/)\.env(\..+)?$')
+FORBIDDEN_TRACKED_FILES = ("config_secret.json",)
 
 # Файл-шаблон, ради которого и написан этот скрипт
 TEMPLATE_FILE = "config_secret.json.example"
@@ -200,6 +197,11 @@ def looks_binary(path, data):
 
 
 # --- Сбор файлов и их содержимого -------------------------------------------
+def collect_range(commit_range):
+    """Получает список файлов, измененных в заданном диапазоне коммитов."""
+    cmd = ["git", "diff", "--name-only", "--diff-filter=d", commit_range]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 def collect_staged():
     """Файлы в индексе (то, что реально уйдёт в коммит)."""
@@ -366,13 +368,21 @@ def check_template(path, text):
     findings.extend(scan_json_fields(path, text))
     return findings
 
-
 def check_forbidden_tracked(paths):
     """Приватные файлы вообще не должны попадать в git."""
     findings = []
+    
+    # Регулярное выражение ловит: .env, .env.local, .env.production, sub/dir/.env.test и т.д.
+    ENV_FILE_PATTERN = re.compile(r'(^|/)\.env(\..+)?$')
+
     for path in paths:
         name = os.path.basename(path)
-        if name in FORBIDDEN_TRACKED_FILES or re.match(r"^config_secret.*\.json$", name):
+        
+        # Проверяем, совпадает ли файл с шаблоном .env.* или старыми правилами
+        is_forbidden_env = bool(ENV_FILE_PATTERN.search(path))
+        is_forbidden_json = name == "config_secret.json" or bool(re.match(r"^config_secret.*\.json$", name))
+
+        if is_forbidden_env or is_forbidden_json:
             findings.append(
                 Finding(
                     path,
@@ -385,7 +395,6 @@ def check_forbidden_tracked(paths):
                 )
             )
     return findings
-
 
 # --- Точка входа -------------------------------------------------------------
 
@@ -438,10 +447,15 @@ def main(argv=None):
         print("[!] Не git-репозиторий или git недоступен / not a git repository", file=sys.stderr)
         return 2
 
+        # 1. Добавляем новое условие в цепочку (выделил жирным)
     if args.staged:
         paths = collect_staged()
         reader = read_staged
         scope = "staged-файлы / staged files"
+    elif args.range:
+        paths = collect_range(args.range)
+        reader = lambda p: read_worktree(root, p)
+        scope = f"файлы из диапазона {args.range} / files in range"
     elif args.paths:
         paths = [os.path.relpath(os.path.abspath(p), root) for p in args.paths]
         reader = lambda p: read_worktree(root, p)  # noqa: E731
@@ -450,6 +464,7 @@ def main(argv=None):
         paths = collect_tracked()
         reader = lambda p: read_worktree(root, p)  # noqa: E731
         scope = "отслеживаемые файлы / tracked files"
+
 
     if args.verbose:
         print(f"[i] Проверяется {len(paths)} шт. ({scope})")
